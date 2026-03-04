@@ -1,0 +1,7 @@
+project_id = "aubhsrqolqlrnobpcnbe"
+
+[functions.analyze-document]
+verify_jwt = false
+
+[functions.approve-registration]
+verify_jwt = false

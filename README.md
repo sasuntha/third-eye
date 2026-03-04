@@ -1,53 +1,206 @@
-# Welcome to your Lovable project
+# Third Eye - Document Management System
 
-## Project info
+A full-stack document management and workflow automation system built with React, FastAPI, and Supabase.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Project Structure
 
-## How can I edit this code?
+This is a monorepo with two main directories:
 
-There are several ways of editing your application.
+```
+third-eye/
+├── frontend/                 # React + TypeScript + Vite
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── README.md
+├── backend/                  # FastAPI with Supabase
+│   ├── app/
+│   ├── main.py
+│   ├── requirements.txt
+│   └── README.md
+├── supabase/                 # Supabase configuration
+│   ├── migrations/
+│   └── functions/
+└── .env.example             # Environment variables template
+```
 
-**Use Lovable**
+## Quick Start
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+### Prerequisites
 
-Changes made via Lovable will be committed automatically to this repo.
+- **Node.js** v18+ (for frontend)
+- **Python** 3.9+ (for backend)
+- **Supabase Project** - Create one at https://supabase.com
 
-**Use your preferred IDE**
+### Environment Setup
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+1. Copy the environment template and configure it:
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+   ```bash
+   cp .env.example .env
+   ```
 
-Follow these steps:
+2. Update `.env` with your Supabase credentials:
+   ```
+   SUPABASE_URL=your_supabase_url
+   SUPABASE_KEY=your_supabase_anon_key
+   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+   SECRET_KEY=your_secret_key_here
+   ```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### Starting the Backend
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+```bash
+cd backend
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Create and activate virtual environment
+python -m venv venv
+venv\Scripts\activate  # Windows
+# source venv/bin/activate  # macOS/Linux
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the server
+python main.py
+```
+
+Backend API will run at `http://localhost:8000`
+
+**API Documentation:**
+
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+### Starting the Frontend
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Frontend will be available at `http://localhost:5173`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Technology Stack
 
-**Use GitHub Codespaces**
+### Frontend
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
+- **React 18** - UI library
+- **TypeScript** - Type safety
+- **Vite** - Build tool
+- **Tailwind CSS** - Styling
+- **shadcn/ui** - Component library
+- **Supabase JS Client** - Backend integration
+
+### Backend
+
+- **FastAPI** - Modern Python web framework
+- **Uvicorn** - ASGI server
+- **Supabase** - Database and authentication
+- **Pydantic** - Data validation
+- **Python-Jose** - JWT authentication
+
+### Database
+
+- **Supabase PostgreSQL** - Relational database
+- **Supabase Auth** - User authentication
+- **Supabase Storage** - File storage
+- **Supabase Functions** - Serverless functions
+
+## Key Features
+
+- **User Authentication** - Login, signup, and session management via Supabase Auth
+- **Document Management** - Upload, review, and approve documents
+- **Task Management** - Create and manage tasks with workflow automation
+- **Role-Based Access** - Chief and Employee role-based dashboards
+- **Real-time Updates** - Real-time data synchronization with Supabase
+- **Responsive Design** - Mobile-friendly user interface
+
+## Development
+
+### Frontend Documentation
+
+See [frontend/README.md](frontend/README.md) for frontend-specific development guide.
+
+### Backend Documentation
+
+See [backend/README.md](backend/README.md) for backend-specific development guide.
+
+### Supabase Configuration
+
+Database schema and migrations are in the `supabase/` directory. To apply migrations:
+
+```bash
+supabase migration up
+```
+
+## API Endpoints
+
+### Authentication
+
+- `POST /api/auth/login` - Login
+- `POST /api/auth/signup` - Create account
+- `POST /api/auth/logout` - Logout
+
+### Users
+
+- `GET /api/users/me` - Get current user
+- `GET /api/users/` - List all users
+- `POST /api/users/` - Create user
+- `GET /api/users/{id}` - Get user by ID
+- `PUT /api/users/{id}` - Update user
+
+## Environment Variables
+
+```env
+# Backend
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+SECRET_KEY=your_secret_key
+API_PORT=8000
+
+# Frontend
+VITE_API_URL=http://localhost:8000
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+## Building for Production
+
+### Frontend
+
+```bash
+cd frontend
+npm run build
+```
+
+### Backend
+
+```bash
+cd backend
+pip install -r requirements.txt
+gunicorn -w 4 -b 0.0.0.0:8000 app.main:app
+```
+
+## Contributing
+
+1. Create a feature branch: `git checkout -b feature/your-feature`
+2. Make your changes
+3. Commit: `git commit -m 'Add feature'`
+4. Push: `git push origin feature/your-feature`
+5. Open a pull request
+
+## License
+
+MIT
+
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
 ## What technologies are used for this project?

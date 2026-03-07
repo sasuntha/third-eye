@@ -1,6 +1,7 @@
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Shield, LogOut, User } from "lucide-react";
+import { LogOut, User } from "lucide-react";
+import EyeIcon from "@/components/icons/EyeIcon";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { fullName, role, signOut } = useAuth();
@@ -11,12 +12,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-              <Shield className="w-5 h-5 text-primary-foreground" />
+              <EyeIcon className="w-5 h-5 text-primary-foreground" />
             </div>
-            <div>
-              <h1 className="text-base font-semibold text-foreground leading-tight">Employee Manager</h1>
-              <p className="text-xs text-muted-foreground capitalize">{role} Dashboard</p>
-            </div>
+            <h1 className="text-lg font-bold text-foreground">Third-Eye</h1>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">

@@ -10,10 +10,11 @@ import { Check, X, Eye, Clock, UserCheck } from "lucide-react";
 
 interface RegistrationRequest {
   id: string;
-  full_name: string;
-  employee_id_number: string;
+  name: string;
+  employee_id: string;
+  email: string;
+  password: string;
   id_image_url: string;
-  status: string;
   created_at: string;
 }
 
@@ -28,7 +29,7 @@ export default function RegistrationRequests() {
 
   const fetchRequests = async () => {
     const { data, error } = await supabase
-      .from("registration_requests")
+      .from("temp_register" as any)
       .select("*")
       .order("created_at", { ascending: false });
     if (!error && data) setRequests(data);
@@ -37,39 +38,80 @@ export default function RegistrationRequests() {
 
   useEffect(() => { fetchRequests(); }, []);
 
-  const handleAction = async (requestId: string, action: "approved" | "rejected") => {
-    setProcessing(requestId);
+  const handleApprove = async (request: RegistrationRequest) => {
+    setProcessing(request.id);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve-registration`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({ requestId, action }),
+      // 1. Insert into employees table
+      const { error: insertError } = await supabase
+        .from("employees" as any)
+        .insert({
+          email: request.email,
+          password: request.password,
+          name: request.name,
+          employee_id: request.employee_id,
+          role: 'employee',
+          id_image_url: request.id_image_url,
+        });
+
+      if (insertError) throw insertError;
+
+      // 2. Delete from temp_register
+      const { error: deleteError } = await supabase
+        .from("temp_register" as any)
+        .delete()
+        .eq("id", request.id);
+
+      if (deleteError) throw deleteError;
+
+      toast({
+        title: "Registration approved",
+        description: `${request.name} has been added as an employee.`
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
-      toast({ title: `Registration ${action}` });
       fetchRequests();
     } catch (err: any) {
-      toast({ title: "Action failed", description: err.message, variant: "destructive" });
+      console.error("Approval error:", err);
+      toast({
+        title: "Approval failed",
+        description: err.message || "Failed to approve registration",
+        variant: "destructive"
+      });
     } finally {
       setProcessing(null);
     }
   };
 
-  const viewImage = async (filePath: string) => {
-    const { data } = await supabase.storage.from("id-images").createSignedUrl(filePath, 300);
-    if (data?.signedUrl) {
-      setImageUrl(data.signedUrl);
-      setViewingImage(filePath);
+  const handleReject = async (requestId: string, requestName: string) => {
+    setProcessing(requestId);
+    try {
+      // Delete from temp_register
+      const { error: deleteError } = await supabase
+        .from("temp_register" as any)
+        .delete()
+        .eq("id", requestId);
+
+      if (deleteError) throw deleteError;
+
+      toast({
+        title: "Registration rejected",
+        description: `${requestName}'s registration has been rejected.`
+      });
+      fetchRequests();
+    } catch (err: any) {
+      console.error("Rejection error:", err);
+      toast({
+        title: "Rejection failed",
+        description: err.message || "Failed to reject registration",
+        variant: "destructive"
+      });
+    } finally {
+      setProcessing(null);
     }
   };
 
-  const pending = requests.filter((r) => r.status === "pending");
-  const processed = requests.filter((r) => r.status !== "pending");
+  const viewImage = (imageUrl: string) => {
+    setImageUrl(imageUrl);
+    setViewingImage(imageUrl);
+  };
 
   if (loading) return <div className="text-center py-12 text-muted-foreground">Loading requests...</div>;
 
@@ -77,24 +119,29 @@ export default function RegistrationRequests() {
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Clock className="w-5 h-5 text-accent" /> Pending Requests ({pending.length})
+          <Clock className="w-5 h-5 text-accent" /> Pending Requests ({requests.length})
         </h3>
-        {pending.length === 0 ? (
+        {requests.length === 0 ? (
           <Card className="glass-card"><CardContent className="py-8 text-center text-muted-foreground">No pending requests</CardContent></Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
-            {pending.map((req) => (
+            {requests.map((req) => (
               <Card key={req.id} className="glass-card animate-slide-up">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">{req.full_name}</CardTitle>
+                    <CardTitle className="text-base">{req.name}</CardTitle>
                     <Badge variant="outline" className="text-accent border-accent">Pending</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <p className="text-sm text-muted-foreground">ID: <span className="text-foreground font-medium">{req.employee_id_number}</span></p>
+                  <p className="text-sm text-muted-foreground">
+                    Employee ID: <span className="text-foreground font-medium">{req.employee_id}</span>
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Email: <span className="text-foreground font-medium">{req.email}</span>
+                  </p>
                   <p className="text-xs text-muted-foreground">{new Date(req.created_at).toLocaleDateString()}</p>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Dialog>
                       <DialogTrigger asChild>
                         <Button variant="outline" size="sm" className="gap-1" onClick={() => viewImage(req.id_image_url)}>
@@ -102,15 +149,26 @@ export default function RegistrationRequests() {
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="max-w-lg">
-                        <DialogHeader><DialogTitle>ID Image - {req.full_name}</DialogTitle></DialogHeader>
+                        <DialogHeader><DialogTitle>ID Image - {req.name}</DialogTitle></DialogHeader>
                         {imageUrl && <img src={imageUrl} alt="Employee ID" className="w-full rounded-lg" />}
                       </DialogContent>
                     </Dialog>
-                    <Button size="sm" className="gap-1 bg-success hover:bg-success/90 text-success-foreground" onClick={() => handleAction(req.id, "approved")} disabled={processing === req.id}>
-                      <Check className="w-3 h-3" /> Approve
+                    <Button
+                      size="sm"
+                      className="gap-1 bg-success hover:bg-success/90 text-success-foreground"
+                      onClick={() => handleApprove(req)}
+                      disabled={processing === req.id}
+                    >
+                      <Check className="w-3 h-3" /> {processing === req.id ? "Processing..." : "Approve"}
                     </Button>
-                    <Button size="sm" variant="destructive" className="gap-1" onClick={() => handleAction(req.id, "rejected")} disabled={processing === req.id}>
-                      <X className="w-3 h-3" /> Reject
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="gap-1"
+                      onClick={() => handleReject(req.id, req.name)}
+                      disabled={processing === req.id}
+                    >
+                      <X className="w-3 h-3" /> {processing === req.id ? "Processing..." : "Reject"}
                     </Button>
                   </div>
                 </CardContent>
@@ -119,29 +177,6 @@ export default function RegistrationRequests() {
           </div>
         )}
       </div>
-
-      {processed.length > 0 && (
-        <div>
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <UserCheck className="w-5 h-5" /> Processed ({processed.length})
-          </h3>
-          <div className="grid gap-3 md:grid-cols-2">
-            {processed.map((req) => (
-              <Card key={req.id} className="glass-card opacity-75">
-                <CardContent className="py-4 flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-sm">{req.full_name}</p>
-                    <p className="text-xs text-muted-foreground">ID: {req.employee_id_number}</p>
-                  </div>
-                  <Badge variant={req.status === "approved" ? "default" : "destructive"}>
-                    {req.status}
-                  </Badge>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

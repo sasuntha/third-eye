@@ -4,19 +4,16 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardList, HelpCircle, Bell } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 
 interface Task {
   id: string;
   title: string;
   description: string;
   status: string;
-  help_requested: boolean;
-  help_message: string | null;
-  additional_assignee: string | null;
+  assigned_to: string;
   created_at: string;
 }
 
@@ -25,60 +22,71 @@ export default function EmployeeTasks() {
   const { toast } = useToast();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [helpMessage, setHelpMessage] = useState("");
-  const [requestingHelp, setRequestingHelp] = useState<string | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
   const fetchTasks = async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from("tasks")
-      .select("*")
-      .or(`assigned_to.eq.${user.id},additional_assignee.eq.${user.id}`)
-      .order("created_at", { ascending: false });
-    if (data) setTasks(data);
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchTasks(); }, [user]);
-
-  // Realtime subscription
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel("employee-tasks")
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, (payload) => {
-        fetchTasks();
-        if (payload.eventType === "UPDATE") {
-          const newTask = payload.new as Task;
-          if (newTask.additional_assignee === user.id) {
-            toast({ title: "You've been assigned to help with a task!", description: newTask.title });
-          }
-        }
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user]);
-
-  const handleRequestHelp = async (taskId: string) => {
+    if (!user?.id) return;
+    
     try {
-      const { error } = await supabase.from("tasks").update({
-        help_requested: true,
-        help_message: helpMessage || "I need additional help with this task.",
-      }).eq("id", taskId);
-      if (error) throw error;
-      toast({ title: "Help request sent to the chief" });
-      setHelpMessage("");
-      setRequestingHelp(null);
-      fetchTasks();
-    } catch (err: any) {
-      toast({ title: "Failed to request help", description: err.message, variant: "destructive" });
+      // Fetch tasks assigned to the logged-in employee
+      const { data, error } = await supabase
+        .from("chief_tasks" as any)
+        .select("*")
+        .eq("assigned_to", user.id)
+        .order("created_at", { ascending: false });
+      
+      if (error) {
+        console.error("Error fetching tasks:", error);
+      } else if (data) {
+        setTasks(data);
+      }
+    } catch (err) {
+      console.error("Error in fetchTasks:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const statusColor = (status: string) => {
-    if (status === "completed") return "default";
-    if (status === "in_progress") return "outline";
-    return "secondary";
+  useEffect(() => {
+    fetchTasks();
+  }, [user]);
+
+  const handleStatusChange = async (taskId: string, newStatus: string) => {
+    setUpdatingStatus(taskId);
+    try {
+      const { error } = await supabase
+        .from("chief_tasks" as any)
+        .update({ status: newStatus })
+        .eq("id", taskId);
+      
+      if (error) throw error;
+      
+      toast({ 
+        title: "Status updated", 
+        description: `Task status changed to ${newStatus.replace('_', ' ')}` 
+      });
+      fetchTasks();
+    } catch (err: any) {
+      console.error("Status update error:", err);
+      toast({ 
+        title: "Failed to update status", 
+        description: err.message, 
+        variant: "destructive" 
+      });
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "bg-green-500/20 text-green-700 border-green-300";
+      case "in_progress":
+        return "bg-blue-500/20 text-blue-700 border-blue-300";
+      default:
+        return "bg-yellow-500/20 text-yellow-700 border-yellow-300";
+    }
   };
 
   if (loading) return <div className="text-center py-12 text-muted-foreground">Loading tasks...</div>;
@@ -86,49 +94,52 @@ export default function EmployeeTasks() {
   return (
     <div>
       <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-        <ClipboardList className="w-5 h-5" /> My Tasks ({tasks.length})
+        <ClipboardList className="w-5 h-5" /> My Assigned Tasks ({tasks.length})
       </h3>
       {tasks.length === 0 ? (
-        <Card className="glass-card"><CardContent className="py-8 text-center text-muted-foreground">No tasks assigned to you yet</CardContent></Card>
+        <Card className="glass-card">
+          <CardContent className="py-8 text-center text-muted-foreground">
+            No tasks assigned to you yet
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-4">
           {tasks.map((task) => (
             <Card key={task.id} className="glass-card animate-slide-up">
               <CardContent className="py-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-semibold text-sm truncate">{task.title}</h4>
-                      <Badge variant={statusColor(task.status)} className="text-xs shrink-0">{task.status}</Badge>
-                      {task.additional_assignee && (
-                        <Badge variant="outline" className="text-xs shrink-0 gap-1">
-                          <Bell className="w-3 h-3" /> Helper assigned
-                        </Badge>
-                      )}
+                <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
+                  <div className="flex-1 min-w-0 w-full">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <h4 className="font-semibold text-base">{task.title}</h4>
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs ${getStatusColor(task.status)}`}
+                      >
+                        {task.status.replace('_', ' ')}
+                      </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground">{task.description}</p>
-                    <p className="text-xs text-muted-foreground mt-2">{new Date(task.created_at).toLocaleDateString()}</p>
-                    {task.help_requested && !task.additional_assignee && (
-                      <p className="text-xs mt-2 p-2 bg-accent/10 rounded text-accent">⏳ Help requested — waiting for chief</p>
-                    )}
+                    <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Assigned: <span className="text-foreground">{new Date(task.created_at).toLocaleDateString()}</span>
+                    </p>
                   </div>
-                  {!task.help_requested && !task.additional_assignee && (
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button size="sm" variant="outline" className="gap-1 shrink-0" onClick={() => setRequestingHelp(task.id)}>
-                          <HelpCircle className="w-3 h-3" /> Request Help
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader><DialogTitle>Request Help</DialogTitle></DialogHeader>
-                        <div className="space-y-4">
-                          <p className="text-sm text-muted-foreground">Task: {task.title}</p>
-                          <Textarea value={helpMessage} onChange={(e) => setHelpMessage(e.target.value)} placeholder="Describe what help you need..." rows={3} />
-                          <Button onClick={() => handleRequestHelp(task.id)}>Send Request</Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  )}
+                  <div className="w-full sm:w-auto sm:min-w-[180px]">
+                    <label className="text-xs text-muted-foreground block mb-1">Update Status:</label>
+                    <Select 
+                      value={task.status} 
+                      onValueChange={(value) => handleStatusChange(task.id, value)}
+                      disabled={updatingStatus === task.id}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </CardContent>
             </Card>

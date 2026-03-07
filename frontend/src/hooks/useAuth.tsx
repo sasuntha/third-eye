@@ -1,11 +1,21 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 
 type UserRole = "chief" | "employee" | null;
 
+interface UserData {
+  id: string;
+  email: string;
+  full_name: string;
+  employee_id: string;
+  role: string;
+}
+
 interface AuthContextType {
   user: User | null;
+  userData: UserData | null;
   role: UserRole;
   loading: boolean;
   fullName: string;
@@ -14,6 +24,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  userData: null,
   role: null,
   loading: true,
   fullName: "",
@@ -24,62 +35,75 @@ export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [role, setRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
   const [fullName, setFullName] = useState("");
+  const navigate = useNavigate();
 
-  const fetchRole = async (userId: string) => {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .maybeSingle();
-    setRole(data?.role ?? null);
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("full_name")
-      .eq("user_id", userId)
-      .maybeSingle();
-    setFullName(profile?.full_name ?? "");
+  const loadUserFromStorage = () => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser) as UserData;
+        setUserData(userData);
+        setRole((userData.role as UserRole) || "employee");
+        setFullName(userData.full_name);
+        // Create a minimal User object for backward compatibility
+        setUser({
+          id: userData.id,
+          email: userData.email,
+        } as User);
+      } catch (error) {
+        console.error("Failed to parse stored user data:", error);
+        localStorage.removeItem("user");
+      }
+    } else {
+      // Clear user if no stored data
+      setUser(null);
+      setUserData(null);
+      setRole(null);
+      setFullName("");
+    }
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (session?.user) {
-          setUser(session.user);
-          // Use setTimeout to avoid Supabase auth deadlock
-          setTimeout(() => fetchRole(session.user.id), 0);
-        } else {
-          setUser(null);
-          setRole(null);
-          setFullName("");
-        }
-        setLoading(false);
-      }
-    );
+    // Check for stored user data from backend login on mount
+    loadUserFromStorage();
+    setLoading(false);
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        fetchRole(session.user.id);
+    // Listen for localStorage changes (from other tabs or programmatic changes)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "user") {
+        loadUserFromStorage();
       }
-      setLoading(false);
-    });
+    };
 
-    return () => subscription.unsubscribe();
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
+  // Also listen for custom events when localStorage changes within the same tab
+  useEffect(() => {
+    const handleUserUpdate = () => {
+      loadUserFromStorage();
+    };
+
+    window.addEventListener("userUpdated", handleUserUpdate);
+    return () => window.removeEventListener("userUpdated", handleUserUpdate);
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    localStorage.removeItem("user");
     setUser(null);
+    setUserData(null);
     setRole(null);
     setFullName("");
+    navigate("/");
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, fullName, signOut }}>
+    <AuthContext.Provider value={{ user, userData, role, loading, fullName, signOut }}>
       {children}
     </AuthContext.Provider>
   );

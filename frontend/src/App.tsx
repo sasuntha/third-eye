@@ -17,7 +17,10 @@ function AppRoutes() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
       </div>
     );
   }
@@ -30,7 +33,7 @@ function AppRoutes() {
     );
   }
 
-  // User is logged in but has no role — pending approval
+  // User is logged in but has no role — pending approval (or default to employee)
   if (!role) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -49,6 +52,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={role === "chief" ? <ChiefDashboard /> : <EmployeeDashboard />} />
+      <Route path="/chief-dashboard" element={role === "chief" ? <ChiefDashboard /> : <Navigate to="/" replace />} />
+      <Route path="/employee-dashboard" element={role === "employee" || role === null ? <EmployeeDashboard /> : <Navigate to="/" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

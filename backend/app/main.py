@@ -8,7 +8,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.api.routes import auth, users
+from app.api.routes import auth, users, forensic_analysis
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -40,6 +40,7 @@ async def health_check():
 # Include routers
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(forensic_analysis.router)
 
 
 # Root endpoint
@@ -62,6 +63,7 @@ async def api_root():
         "endpoints": {
             "auth": "/api/auth",
             "users": "/api/users",
+            "forensic_analysis": "/api/forensic-analysis",
             "health": "/health"
         }
     }

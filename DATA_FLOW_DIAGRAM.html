@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Third-Eye — Complete Data Flow Diagram</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      padding: 24px;
+    }
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      text-align: center;
+      color: #94a3b8;
+      font-size: 0.9rem;
+      margin-bottom: 36px;
+    }
+    .section {
+      background: #1e2130;
+      border: 1px solid #2d3348;
+      border-radius: 16px;
+      padding: 28px 32px;
+      margin-bottom: 32px;
+    }
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .badge-auth   { background: #1e3a5f; color: #38bdf8; }
+    .badge-reg    { background: #1a3a2a; color: #4ade80; }
+    .badge-ai     { background: #3b1d5f; color: #c084fc; }
+    .badge-task   { background: #3b2a10; color: #fb923c; }
+    .badge-review { background: #3b1e28; color: #f472b6; }
+    .badge-full   { background: #1e2f3b; color: #67e8f9; }
+    .mermaid { width: 100%; overflow-x: auto; }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #2d3348;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.82rem;
+      color: #94a3b8;
+    }
+    .dot {
+      width: 12px; height: 12px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Third-Eye — Complete Data Flow Diagram</h1>
+<p class="subtitle">Forensic Investigation Management System · React + FastAPI + Supabase</p>
+
+<!-- ══════════════════════════════════════════════
+     FULL SYSTEM OVERVIEW
+═══════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">
+    <span class="badge badge-full">System Overview</span>
+    All actors, layers, and data paths at a glance
+  </div>
+  <div class="mermaid">
+flowchart TD
+    subgraph ACTORS["👤 Actors"]
+        CHF(["👑 Chief"])
+        EMP(["👷 Employee"])
+        NEW(["🆕 New User"])
+    end
+
+    subgraph FRONTEND["🖥️ Frontend — React/TypeScript (Vite)"]
+        direction TB
+        LP["Login.tsx\n(Login / Register)"]
+        CD["ChiefDashboard.tsx"]
+        ED["EmployeeDashboard.tsx"]
+        RR["RegistrationRequests.tsx"]
+        TM["TaskManagement.tsx"]
+        DR["DocumentReview.tsx"]
+        DS["DocumentScanner.tsx"]
+        ET["EmployeeTasks.tsx"]
+        UA["useAuth Hook\n(localStorage)"]
+    end
+
+    subgraph BACKEND["⚙️ Backend — FastAPI (Python)"]
+        direction TB
+        AL["/api/auth/login"]
+        FA["/api/forensic-analysis\n/analyze-and-report"]
+        subgraph AI_PIPELINE["🧠 AI Pipeline"]
+            BD["BloodDetectionAnalyzer\n(OpenCV · HSV)"]
+            WC["WeaponTypeClassifier\n(TensorFlow CNN)"]
+            SM["StringMethodAnalyzer\n(DBSCAN · Geometry)"]
+        end
+        PDF["PDFReportGenerator\n(ReportLab)"]
+    end
+
+    subgraph SUPABASE["🗄️ Supabase (PostgreSQL + Storage)"]
+        direction TB
+        subgraph TABLES["Database Tables"]
+            TB_EMP[("employees")]
+            TB_TMP[("temp_register")]
+            TB_TSK[("chief_tasks")]
+            TB_RPT[("report_data")]
+        end
+        subgraph STORAGE["Storage Buckets"]
+            ST_IMG[["id_images\n(private)"]]
+            ST_PDF[["blood_report\n(public)"]]
+        end
+    end
+
+    %% Auth paths
+    NEW -- "register form" --> LP
+    CHF & EMP -- "email + password" --> LP
+    LP -- "POST /api/auth/login" --> AL
+    AL -- "SELECT email, password" --> TB_EMP
+    TB_EMP -- "user + role" --> AL
+    AL -- "user object + role" --> LP
+    LP -- "localStorage.setItem('user',...)" --> UA
+    UA -- "role=chief" --> CD
+    UA -- "role=employee" --> ED
+
+    %% Registration
+    LP -- "upload ID image" --> ST_IMG
+    LP -- "INSERT pending row" --> TB_TMP
+
+    %% Chief panels
+    CD --> RR & TM & DR
+
+    %% Employee panels
+    ED --> DS & ET
+
+    %% Forensic
+    DS -- "image + doc name\nmultipart/form-data" --> FA
+    FA --> BD
+    BD -- "blood detected ≥65%" --> WC & SM
+    WC & SM --> PDF
+    PDF -- "base64 PDF" --> FA
+    FA -- "JSON + base64 PDF" --> DS
+    DS -- "upload PDF blob" --> ST_PDF
+    DS -- "INSERT metadata" --> TB_RPT
+
+    %% Review
+    DR -- "SELECT *" --> TB_RPT
+    DR -- "open PDF URL" --> ST_PDF
+
+    %% Registration approval
+    RR -- "SELECT pending" --> TB_TMP
+    RR -- "view ID image" --> ST_IMG
+    RR -- "INSERT approved user\nDELETE from temp" --> TB_EMP & TB_TMP
+
+    %% Tasks
+    TM -- "INSERT task" --> TB_TSK
+    TM -- "SELECT tasks" --> TB_TSK
+    TM -- "UPDATE helper_employee_id" --> TB_TSK
+    ET -- "SELECT assigned tasks" --> TB_TSK
+    ET -- "UPDATE status / help_requested" --> TB_TSK
+
+    style ACTORS fill:#0f1620,stroke:#334155,color:#e2e8f0
+    style FRONTEND fill:#0f1a2e,stroke:#1e3a5f,color:#e2e8f0
+    style BACKEND fill:#1a0f2e,stroke:#3b1d5f,color:#e2e8f0
+    style SUPABASE fill:#0f1a1a,stroke:#134e4a,color:#e2e8f0
+    style AI_PIPELINE fill:#1a1030,stroke:#4c1d95,color:#e2e8f0
+    style TABLES fill:#091a1a,stroke:#115e59,color:#e2e8f0
+    style STORAGE fill:#091a1a,stroke:#115e59,color:#e2e8f0
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     1. AUTHENTICATION FLOW
+═══════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">
+    <span class="badge badge-auth">1</span>
+    Authentication &amp; Session Flow
+  </div>
+  <div class="mermaid">
+sequenceDiagram
+    actor User
+    participant LP as Login.tsx
+    participant UA as useAuth Hook
+    participant API as FastAPI /api/auth/login
+    participant DB as employees table
+
+    User->>LP: Enter email + password
+    LP->>API: POST { email, password }
+    API->>DB: SELECT * FROM employees WHERE email = ?
+    DB-->>API: Row { id, email, full_name, role, password_hash }
+    API->>API: bcrypt.verify(password, hash)
+    alt Valid credentials
+        API-->>LP: { status: "success", user: {...}, role: "chief"|"employee" }
+        LP->>LP: localStorage.setItem("user", JSON)
+        LP->>LP: dispatchEvent("userUpdated")
+        LP->>UA: Event triggers re-read of localStorage
+        UA->>UA: Set user, role, fullName state
+        alt role === "chief"
+            UA-->>LP: Route → /chief-dashboard
+        else role === "employee"
+            UA-->>LP: Route → /employee-dashboard
+        end
+    else Invalid credentials
+        API-->>LP: { status: "error", message: "..." }
+        LP-->>User: Show error toast
+    end
+
+    Note over UA: signOut() clears localStorage → routes to /
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     2. REGISTRATION FLOW
+═══════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">
+    <span class="badge badge-reg">2</span>
+    Employee Registration &amp; Approval Flow
+  </div>
+  <div class="mermaid">
+sequenceDiagram
+    actor NE as New Employee
+    actor CH as Chief
+    participant LP as Login.tsx (Register tab)
+    participant RR as RegistrationRequests.tsx
+    participant SB as Supabase JS Client
+    participant IMG as id_images bucket
+    participant TMP as temp_register table
+    participant EMP as employees table
+
+    NE->>LP: Fill form (name, emp ID, email, password, ID photo)
+    LP->>IMG: supabase.storage.upload(idImageFile)
+    IMG-->>LP: Public URL for ID image
+
+    LP->>TMP: supabase.from('temp_register').insert({ name, employee_id,\n email, password, id_image_url })
+    TMP-->>LP: Success
+
+    LP-->>NE: "Registration submitted — await approval"
+
+    Note over CH,RR: Chief opens Dashboard → Registrations tab
+
+    RR->>TMP: supabase.from('temp_register').select('*')
+    TMP-->>RR: List of pending requests
+
+    CH->>RR: Click "View ID" (opens id_image_url)
+    IMG-->>CH: ID image
+
+    alt Approve
+        CH->>RR: Click Approve
+        RR->>EMP: supabase.from('employees').insert({ name, employee_id,\n email, password, role: 'employee', is_active: true })
+        RR->>TMP: supabase.from('temp_register').delete().eq('id', ...)
+        RR-->>CH: Toast "Employee approved"
+    else Reject
+        CH->>RR: Click Reject
+        RR->>TMP: supabase.from('temp_register').delete().eq('id', ...)
+        RR-->>CH: Toast "Registration rejected"
+    end
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     3. FORENSIC ANALYSIS FLOW
+═══════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">
+    <span class="badge badge-ai">3</span>
+    Forensic Analysis &amp; Report Generation Flow
+  </div>
+  <div class="mermaid">
+flowchart TD
+    EMP(["👷 Employee"]) -- "select image + document name" --> DS
+
+    subgraph FE["🖥️ Frontend — DocumentScanner.tsx"]
+        DS["Build FormData\n(image + doc_name)"]
+        DS2["Decode base64 → Blob\nCreate object URL for preview"]
+        DS3["supabase.storage.from('blood_report')\n.upload(pdfBlob)"]
+        DS4["supabase.from('report_data').insert({\nuploaded_by, document_name, report_url,\nanalysis_summary, blood_detected,\nblood_confidence, weapon_type,\nweapon_confidence, origin_coordinates\n})"]
+    end
+
+    subgraph API["⚙️ FastAPI — /api/forensic-analysis/analyze-and-report"]
+        R1["Receive multipart/form-data\nDecode image bytes → numpy array\nResize to 512×512"]
+    end
+
+    subgraph ORCH["🧠 ForensicAnalysisOrchestrator"]
+        direction TB
+        BD["BloodDetectionAnalyzer\n───────────────────\nHSV color thresholding\nDetect: fresh red / dried brown / dark\nSplatter texture analysis\nOutput: verdict + confidence%\n+ base64 visualization"]
+        CHK{{"confidence\n≥ 65%?"}}
+        WC["WeaponTypeClassifier\n───────────────────\nTensorFlow/Keras CNN\nModel: my_weapon_model_v2.h5\nClassify: Gun vs Melee\n(high/medium velocity vs cast-off)\nOutput: weapon_type + confidence%\n+ visualization"]
+        SM["StringMethodAnalyzer\n───────────────────\nDetect blood droplets\nMeasure elongation + impact angle\nBack-trace trajectories\nDBSCAN cluster intersection\nOutput: origin coordinates\n+ statistics + visualization"]
+        BD --> CHK
+        CHK -- "yes" --> WC & SM
+        CHK -- "no" --> SKIP["Skip weapon &\norigin analysis"]
+    end
+
+    subgraph PDFGEN["📄 ForensicPDFReportGenerator"]
+        PG["Generate formatted PDF\n(ReportLab)\nSave to backend/reports/"]
+        PE["Read PDF → base64 encode"]
+    end
+
+    subgraph SB["🗄️ Supabase"]
+        STG[["blood_report bucket\n(public)"]]
+        TBL[("report_data table")]
+    end
+
+    DS -- "POST multipart/form-data" --> R1
+    R1 --> BD
+    WC & SM & SKIP --> PG
+    PG --> PE
+    PE -- "JSON { analysis_results,\npdf_report: { pdf_base64 } }" --> DS2
+    DS2 --> DS3
+    DS3 -- "PDF public URL" --> DS4
+    DS3 --> STG
+    DS4 --> TBL
+    DS4 -- "success" --> EMP
+
+    style FE fill:#0f1a2e,stroke:#1e3a5f,color:#e2e8f0
+    style API fill:#1a0f2e,stroke:#3b1d5f,color:#e2e8f0
+    style ORCH fill:#1a1030,stroke:#4c1d95,color:#e2e8f0
+    style PDFGEN fill:#1a1a10,stroke:#713f12,color:#e2e8f0
+    style SB fill:#0f1a1a,stroke:#134e4a,color:#e2e8f0
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     4. TASK MANAGEMENT FLOW
+═══════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">
+    <span class="badge badge-task">4</span>
+    Task Management &amp; Help-Request Flow
+  </div>
+  <div class="mermaid">
+sequenceDiagram
+    actor CH as Chief
+    actor EMP as Employee
+    participant TM as TaskManagement.tsx
+    participant ET as EmployeeTasks.tsx
+    participant SB as chief_tasks table
+
+    CH->>TM: Select employee + fill title & description
+    TM->>SB: INSERT { title, description,\nassigned_to: emp.id, created_by: chief.id,\nstatus: 'pending', help_requested: false }
+    SB-->>TM: New task row
+
+    EMP->>ET: Open Tasks tab
+    ET->>SB: SELECT * WHERE assigned_to = currentUser.id
+    SB-->>ET: List of tasks
+
+    EMP->>ET: Click "Start" → status = in_progress
+    ET->>SB: UPDATE chief_tasks SET status='in_progress' WHERE id=...
+
+    EMP->>ET: Click "Complete" → status = completed
+    ET->>SB: UPDATE chief_tasks SET status='completed' WHERE id=...
+
+    Note over EMP,ET: Employee encounters a problem
+
+    EMP->>ET: Type help message → "Request Help"
+    ET->>SB: UPDATE chief_tasks SET help_requested=true,\nhelp_message='...' WHERE id=...
+
+    CH->>TM: Refresh task list
+    TM->>SB: SELECT * FROM chief_tasks
+    SB-->>TM: Tasks (one with help_requested=true)
+    TM-->>CH: Show red "Help Requested" badge + message
+
+    CH->>TM: Select helper employee → "Assign Helper"
+    TM->>SB: UPDATE chief_tasks SET\nhelper_employee_id=helperEmp.id,\nhelp_requested=false WHERE id=...
+    SB-->>TM: Updated row
+    TM-->>CH: Toast "Helper assigned"
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     5. DOCUMENT REVIEW FLOW
+═══════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">
+    <span class="badge badge-review">5</span>
+    Chief Document Review Flow
+  </div>
+  <div class="mermaid">
+flowchart LR
+    CH(["👑 Chief"])
+
+    subgraph FE["🖥️ DocumentReview.tsx"]
+        DR1["SELECT * FROM report_data"]
+        DR2["SELECT id, name, employee_id\nFROM employees"]
+        DR3["Join: map uploaded_by → employee name"]
+        DR4["Render report cards:\n• Document name\n• Submitted by (employee)\n• Blood detected + confidence\n• Weapon type + confidence\n• Origin coordinates\n• Date"]
+        DR5["'View Report' button\n→ window.open(report_url)"]
+    end
+
+    subgraph SB["🗄️ Supabase"]
+        RPT[("report_data table")]
+        EMP[("employees table")]
+        PDF[["blood_report bucket\n(public PDFs)"]]
+    end
+
+    CH -- "opens Documents tab" --> DR1
+    DR1 -- "SELECT *" --> RPT
+    RPT -- "report rows" --> DR1
+    DR2 -- "SELECT employees" --> EMP
+    EMP -- "employee list" --> DR2
+    DR1 & DR2 --> DR3
+    DR3 --> DR4
+    DR4 --> CH
+    CH -- "click View Report" --> DR5
+    DR5 -- "open public URL" --> PDF
+    PDF -- "PDF in new tab" --> CH
+
+    style FE fill:#0f1a2e,stroke:#1e3a5f,color:#e2e8f0
+    style SB fill:#0f1a1a,stroke:#134e4a,color:#e2e8f0
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     6. DATABASE SCHEMA
+═══════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">
+    <span class="badge badge-full">6</span>
+    Database Schema &amp; Relationships
+  </div>
+  <div class="mermaid">
+erDiagram
+    employees {
+        UUID id PK
+        TEXT email UK
+        TEXT password
+        TEXT full_name
+        TEXT employee_id UK
+        TEXT role
+        BOOLEAN is_active
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+
+    temp_register {
+        UUID id PK
+        TEXT name
+        TEXT employee_id
+        TEXT email
+        TEXT password
+        TEXT id_image_url
+        TIMESTAMPTZ created_at
+    }
+
+    chief_tasks {
+        UUID id PK
+        TEXT title
+        TEXT description
+        UUID assigned_to FK
+        UUID created_by FK
+        TEXT status
+        BOOLEAN help_requested
+        TEXT help_message
+        BIGINT helper_employee_id
+        TIMESTAMPTZ created_at
+    }
+
+    report_data {
+        UUID id PK
+        UUID uploaded_by FK
+        TEXT document_name
+        TEXT report_url
+        JSONB analysis_summary
+        BOOLEAN blood_detected
+        DECIMAL blood_confidence
+        TEXT weapon_type
+        DECIMAL weapon_confidence
+        TEXT origin_coordinates
+        TIMESTAMPTZ created_at
+    }
+
+    profiles {
+        UUID id PK
+        TEXT full_name
+        TEXT avatar_url
+        TIMESTAMPTZ updated_at
+    }
+
+    user_roles {
+        UUID id PK
+        UUID user_id FK
+        app_role role
+    }
+
+    employees ||--o{ chief_tasks : "assigned_to"
+    employees ||--o{ chief_tasks : "created_by"
+    employees ||--o{ report_data : "uploaded_by"
+  </div>
+</div>
+
+<!-- LEGEND -->
+<div class="section">
+  <div class="section-title" style="margin-bottom:0">Color Legend</div>
+  <div class="legend">
+    <div class="legend-item"><div class="dot" style="background:#1e3a5f"></div>Frontend (React)</div>
+    <div class="legend-item"><div class="dot" style="background:#3b1d5f"></div>Backend (FastAPI)</div>
+    <div class="legend-item"><div class="dot" style="background:#134e4a"></div>Supabase (DB + Storage)</div>
+    <div class="legend-item"><div class="dot" style="background:#4c1d95"></div>AI Pipeline</div>
+    <div class="legend-item"><div class="dot" style="background:#713f12"></div>PDF Generator</div>
+  </div>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#1e293b',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#334155',
+      lineColor: '#64748b',
+      secondaryColor: '#0f172a',
+      tertiaryColor: '#1e293b',
+      background: '#0f1117',
+      mainBkg: '#1e293b',
+      nodeBorder: '#334155',
+      clusterBkg: '#1e293b',
+      titleColor: '#e2e8f0',
+      edgeLabelBackground: '#1e293b',
+      actorBkg: '#1e293b',
+      actorBorder: '#334155',
+      actorTextColor: '#e2e8f0',
+      actorLineColor: '#64748b',
+      signalColor: '#94a3b8',
+      signalTextColor: '#e2e8f0',
+      labelBoxBkgColor: '#1e293b',
+      labelBoxBorderColor: '#334155',
+      labelTextColor: '#e2e8f0',
+      loopTextColor: '#e2e8f0',
+      noteBorderColor: '#334155',
+      noteBkgColor: '#0f172a',
+      noteTextColor: '#e2e8f0',
+    },
+    flowchart: { curve: 'basis', padding: 20 },
+    sequence: { mirrorActors: false, useMaxWidth: true, wrap: true },
+    er: { useMaxWidth: true },
+  });
+</script>
+</body>
+</html>

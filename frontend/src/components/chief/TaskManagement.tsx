@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, ClipboardList } from "lucide-react";
+import { Plus, ClipboardList, UserPlus, AlertCircle } from "lucide-react";
 
 interface Employee {
   id: string;
@@ -24,6 +25,9 @@ interface Task {
   description: string;
   assigned_to: string;
   status: string;
+  help_requested: boolean;
+  help_message: string | null;
+  helper_employee_id: string | null;
   created_at: string;
 }
 
@@ -34,6 +38,9 @@ export default function TaskManagement() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedHelper, setSelectedHelper] = useState("");
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -123,6 +130,45 @@ export default function TaskManagement() {
   const getEmployeeName = (id: string) => {
     const employee = employees.find((e) => e.id === id);
     return employee ? `${employee.name} (${employee.employee_id})` : "Unknown";
+  };
+
+  const handleAssignHelper = async () => {
+    if (!selectedTask || !selectedHelper) {
+      toast({
+        title: "Please select a helper",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("chief_tasks" as any)
+        .update({
+          helper_employee_id: selectedHelper,
+          help_requested: false // Mark as resolved
+        })
+        .eq("id", selectedTask.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Helper assigned successfully",
+        description: `${getEmployeeName(selectedHelper)} has been assigned to help`
+      });
+
+      setAssignDialogOpen(false);
+      setSelectedHelper("");
+      setSelectedTask(null);
+      fetchData();
+    } catch (err: any) {
+      console.error("Assign helper error:", err);
+      toast({
+        title: "Failed to assign helper",
+        description: err.message,
+        variant: "destructive"
+      });
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -216,27 +262,125 @@ export default function TaskManagement() {
             {tasks.map((task) => (
               <Card key={task.id} className="glass-card animate-slide-up">
                 <CardContent className="py-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h4 className="font-semibold text-base">{task.title}</h4>
-                        <Badge
-                          variant="outline"
-                          className={`text-xs ${getStatusColor(task.status)}`}
-                        >
-                          {task.status.replace('_', ' ')}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
-                      <div className="flex gap-4 text-xs text-muted-foreground">
-                        <span>
-                          Assigned to: <span className="text-foreground font-medium">{getEmployeeName(task.assigned_to)}</span>
-                        </span>
-                        <span>
-                          Created: <span className="text-foreground">{new Date(task.created_at).toLocaleDateString()}</span>
-                        </span>
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <h4 className="font-semibold text-base">{task.title}</h4>
+                          <Badge 
+                            variant="outline" 
+                            className={`text-xs ${getStatusColor(task.status)}`}
+                          >
+                            {task.status.replace('_', ' ')}
+                          </Badge>
+                          {task.help_requested && (
+                            <Badge variant="outline" className="text-xs bg-red-500/20 text-red-700 border-red-300 gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              Help Needed!
+                            </Badge>
+                          )}
+                          {task.helper_employee_id && (
+                            <Badge variant="outline" className="text-xs bg-blue-500/20 text-blue-700 border-blue-300 gap-1">
+                              <UserPlus className="w-3 h-3" />
+                              Helper Assigned
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
+                        <div className="flex gap-4 text-xs text-muted-foreground flex-wrap">
+                          <span>
+                            Assigned to: <span className="text-foreground font-medium">{getEmployeeName(task.assigned_to)}</span>
+                          </span>
+                          {task.helper_employee_id && (
+                            <span>
+                              Helper: <span className="text-foreground font-medium">{getEmployeeName(task.helper_employee_id)}</span>
+                            </span>
+                          )}
+                          <span>
+                            Created: <span className="text-foreground">{new Date(task.created_at).toLocaleDateString()}</span>
+                          </span>
+                        </div>
+                        {task.help_requested && task.help_message && (
+                          <div className="mt-3 p-3 bg-red-500/10 rounded border border-red-300/50">
+                            <p className="text-xs font-medium text-red-700 mb-1 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              Help Request:
+                            </p>
+                            <p className="text-sm text-foreground">{task.help_message}</p>
+                          </div>
+                        )}
                       </div>
                     </div>
+                    {task.help_requested && !task.helper_employee_id && (
+                      <div className="flex justify-end pt-2 border-t">
+                        <Dialog open={assignDialogOpen && selectedTask?.id === task.id} onOpenChange={(open) => {
+                          setAssignDialogOpen(open);
+                          if (!open) {
+                            setSelectedTask(null);
+                            setSelectedHelper("");
+                          }
+                        }}>
+                          <DialogTrigger asChild>
+                            <Button 
+                              variant="default" 
+                              size="sm" 
+                              className="gap-2"
+                              onClick={() => setSelectedTask(task)}
+                            >
+                              <UserPlus className="w-4 h-4" />
+                              Assign Helper
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Assign Helper Employee</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div>
+                                <Label className="text-sm font-medium mb-2 block">Task: {task.title}</Label>
+                                <p className="text-sm text-muted-foreground mb-2">Assigned to: {getEmployeeName(task.assigned_to)}</p>
+                                {task.help_message && (
+                                  <div className="p-2 bg-accent/10 rounded border border-accent/20 mb-3">
+                                    <p className="text-xs font-medium text-accent mb-1">Help request message:</p>
+                                    <p className="text-sm text-muted-foreground">{task.help_message}</p>
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <Label htmlFor="helper-select">Select Helper Employee</Label>
+                                <Select value={selectedHelper} onValueChange={setSelectedHelper}>
+                                  <SelectTrigger id="helper-select" className="mt-1">
+                                    <SelectValue placeholder="Choose an employee to help" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {employees.filter(e => e.id !== task.assigned_to).map((emp) => (
+                                      <SelectItem key={emp.id} value={emp.id}>
+                                        {emp.name} ({emp.employee_id})
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="flex gap-2 justify-end">
+                                <Button 
+                                  variant="outline" 
+                                  onClick={() => {
+                                    setAssignDialogOpen(false);
+                                    setSelectedHelper("");
+                                    setSelectedTask(null);
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button onClick={handleAssignHelper} disabled={!selectedHelper}>
+                                  Assign Helper
+                                </Button>
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

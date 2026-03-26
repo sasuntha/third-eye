@@ -290,7 +290,7 @@ export default function Login() {
                   <form onSubmit={handleRegister} className="space-y-4">
                     <div>
                       <Label htmlFor="reg-name">Full Name</Label>
-                      <Input id="reg-name" value={regName} onChange={(e) => setRegName(e.target.value)} required placeholder="John Doe" />
+                      <Input id="reg-name" value={regName} onChange={(e) => setRegName(e.target.value)} required placeholder="Sasun Tovmasyan" />
                     </div>
                     <div>
                       <Label htmlFor="reg-id">Employee ID Number</Label>
